@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Product, seedProducts } from '@/data/products';
+import { toast } from 'sonner';
 
 interface ProductsContextType {
   products: Product[];
@@ -31,28 +32,32 @@ export const ProductsProvider = ({ children }: { children: React.ReactNode }) =>
 
   const addProduct = useCallback(async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: crypto.randomUUID() };
+    console.log('📦 [ProductsContext] addProduct triggered:', { 
+      id: newProduct.id, 
+      name: newProduct.name,
+      imageSize: newProduct.imageUrl?.length || 0 
+    });
     
-    // 1. Update local state immediately for UI responsiveness
     setProducts((prev) => [...prev, newProduct]);
     
-    // 2. Persist to DB
     try {
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProduct)
       });
-      if (!res.ok) throw new Error('Failed to save product');
+      const data = await res.json();
+      console.log('✅ [ProductsContext] addProduct response:', data);
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to save');
     } catch (e) {
-      console.error('Failed to save to DB', e);
-      // Optional: revert state if critical, but for this use case, logging is usually sufficient
+      console.error('❌ [ProductsContext] addProduct error:', e);
+      toast.error('Erro ao guardar ferramenta: ' + (e instanceof Error ? e.message : 'Erro desconhecido'));
     }
   }, []);
 
   const updateProduct = useCallback(async (id: string, updates: Partial<Omit<Product, 'id'>>) => {
     let updatedProduct: Product | undefined;
     
-    // 1. Calculate and update local state
     setProducts((prev) => {
       const targetIndex = prev.findIndex(p => p.id === id);
       if (targetIndex === -1) return prev;
@@ -63,17 +68,24 @@ export const ProductsProvider = ({ children }: { children: React.ReactNode }) =>
       return newProducts;
     });
 
-    // 2. Persist updated product to DB
     if (updatedProduct) {
+      console.log('📝 [ProductsContext] updateProduct triggered:', { 
+        id, 
+        name: updatedProduct.name, 
+        imageSize: updatedProduct.imageUrl?.length || 0 
+      });
       try {
         const res = await fetch('/api/products', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedProduct)
         });
-        if (!res.ok) throw new Error('Failed to update product');
+        const data = await res.json();
+        console.log('✅ [ProductsContext] updateProduct response:', data);
+        if (!res.ok) throw new Error(data.error || data.message || 'Failed to update');
       } catch (e) {
-        console.error('Failed to update DB', e);
+        console.error('❌ [ProductsContext] updateProduct error:', e);
+        toast.error('Erro ao atualizar ferramenta: ' + (e instanceof Error ? e.message : 'Erro desconhecido'));
       }
     }
   }, []);

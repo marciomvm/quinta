@@ -15,6 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
       const rows = await sql`SELECT data FROM products`;
+      console.log(`[API/Products] GET returned ${rows.length} products. Total approximate size: ${JSON.stringify(rows).length} chars`);
       const products = rows.map((row: any) => row.data);
       return res.status(200).json(products);
     }
@@ -23,12 +24,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const product = req.body;
       if (!product || !product.id) return res.status(400).json({ error: 'Invalid product' });
       
-      await sql`
-        INSERT INTO products (id, data) 
-        VALUES (${product.id}, ${JSON.stringify(product)}::jsonb)
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-      `;
-      return res.status(req.method === 'POST' ? 201 : 200).json(product);
+      const payloadSize = JSON.stringify(product).length;
+      console.log(`[API/Products] UPSERT call for ID: ${product.id}. Payload size: ${payloadSize} chars`);
+      
+      try {
+        await sql`
+          INSERT INTO products (id, data) 
+          VALUES (${product.id}, ${JSON.stringify(product)}::jsonb)
+          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+        `;
+        console.log(`[API/Products] UPSERT success for ID: ${product.id}`);
+        return res.status(req.method === 'POST' ? 201 : 200).json(product);
+      } catch (sqlError) {
+        console.error(`[API/Products] SQL Error during UPSERT:`, sqlError);
+        return res.status(500).json({ 
+          error: 'Database error preserved during update',
+          details: (sqlError as Error).message 
+        });
+      }
     }
     
     if (req.method === 'DELETE') {
