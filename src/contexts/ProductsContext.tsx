@@ -31,37 +31,51 @@ export const ProductsProvider = ({ children }: { children: React.ReactNode }) =>
 
   const addProduct = useCallback(async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: crypto.randomUUID() };
+    
+    // 1. Update local state immediately for UI responsiveness
     setProducts((prev) => [...prev, newProduct]);
+    
+    // 2. Persist to DB
     try {
-      await fetch('/api/products', {
+      const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProduct)
       });
+      if (!res.ok) throw new Error('Failed to save product');
     } catch (e) {
       console.error('Failed to save to DB', e);
+      // Optional: revert state if critical, but for this use case, logging is usually sufficient
     }
   }, []);
 
   const updateProduct = useCallback(async (id: string, updates: Partial<Omit<Product, 'id'>>) => {
-    // Calculate the updated product first so we have access to it for the API call
+    let updatedProduct: Product | undefined;
+    
+    // 1. Calculate and update local state
     setProducts((prev) => {
       const targetIndex = prev.findIndex(p => p.id === id);
       if (targetIndex === -1) return prev;
       
       const newProducts = [...prev];
-      const updatedProduct = { ...newProducts[targetIndex], ...updates } as Product;
+      updatedProduct = { ...newProducts[targetIndex], ...updates } as Product;
       newProducts[targetIndex] = updatedProduct;
-      
-      // Fire the API request synchronously during the update
-      fetch('/api/products', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedProduct)
-      }).catch(e => console.error('Failed to update DB', e));
-      
       return newProducts;
     });
+
+    // 2. Persist updated product to DB
+    if (updatedProduct) {
+      try {
+        const res = await fetch('/api/products', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedProduct)
+        });
+        if (!res.ok) throw new Error('Failed to update product');
+      } catch (e) {
+        console.error('Failed to update DB', e);
+      }
+    }
   }, []);
 
   const deleteProduct = useCallback(async (id: string) => {

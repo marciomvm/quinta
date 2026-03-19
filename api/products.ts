@@ -19,18 +19,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(products);
     }
     
-    if (req.method === 'POST') {
+    if (req.method === 'POST' || req.method === 'PUT') {
       const product = req.body;
       if (!product || !product.id) return res.status(400).json({ error: 'Invalid product' });
-      await sql`INSERT INTO products (id, data) VALUES (${product.id}, ${JSON.stringify(product)}::jsonb)`;
-      return res.status(201).json(product);
-    }
-    
-    if (req.method === 'PUT') {
-      const product = req.body;
-      if (!product || !product.id) return res.status(400).json({ error: 'Invalid product' });
-      await sql`UPDATE products SET data = ${JSON.stringify(product)}::jsonb WHERE id = ${product.id}`;
-      return res.status(200).json(product);
+      
+      await sql`
+        INSERT INTO products (id, data) 
+        VALUES (${product.id}, ${JSON.stringify(product)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+      `;
+      return res.status(req.method === 'POST' ? 201 : 200).json(product);
     }
     
     if (req.method === 'DELETE') {
