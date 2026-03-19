@@ -12,10 +12,15 @@ export const config = {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const sql = neon(process.env.DATABASE_URL!);
 
+  // Disable caching for serverless functions
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     if (req.method === 'GET') {
       const rows = await sql`SELECT data FROM products`;
-      console.log(`[API/Products] GET returned ${rows.length} products. Total approximate size: ${JSON.stringify(rows).length} chars`);
+      console.log(`[API/Products] GET returned ${rows.length} products`);
       const products = rows.map((row: any) => row.data);
       return res.status(200).json(products);
     }
@@ -28,17 +33,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[API/Products] UPSERT call for ID: ${product.id}. Payload size: ${payloadSize} chars`);
       
       try {
-        await sql`
+        const result = await sql`
           INSERT INTO products (id, data) 
-          VALUES (${product.id}, ${JSON.stringify(product)}::jsonb)
+          VALUES (${product.id}, ${product}::jsonb)
           ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+          RETURNING data
         `;
-        console.log(`[API/Products] UPSERT success for ID: ${product.id}`);
-        return res.status(req.method === 'POST' ? 201 : 200).json(product);
+        const savedProduct = result[0].data;
+        console.log(`[API/Products] UPSERT success for ID: ${product.id}. Stored image length: ${savedProduct.imageUrl?.length || 0}`);
+        return res.status(req.method === 'POST' ? 201 : 200).json(savedProduct);
       } catch (sqlError) {
         console.error(`[API/Products] SQL Error during UPSERT:`, sqlError);
         return res.status(500).json({ 
-          error: 'Database error preserved during update',
+          error: 'Database error', 
           details: (sqlError as Error).message 
         });
       }

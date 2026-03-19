@@ -15,9 +15,14 @@ export const ProductsProvider = ({ children }: { children: React.ReactNode }) =>
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    fetch('/api/products')
+    // Add cache-busting query param
+    fetch('/api/products?t=' + Date.now())
       .then(res => res.json())
       .then(data => {
+        console.log('📥 [ProductsContext] GET products loaded:', { 
+          count: Array.isArray(data) ? data.length : 0,
+          firstItemHasImage: Array.isArray(data) && data[0]?.imageUrl ? 'Yes' : 'No'
+        });
         if (Array.isArray(data) && data.length > 0) {
           setProducts(data);
         } else {
