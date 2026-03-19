@@ -44,26 +44,24 @@ export const ProductsProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   const updateProduct = useCallback(async (id: string, updates: Partial<Omit<Product, 'id'>>) => {
-    let updated: Product | undefined;
-    setProducts((prev) => prev.map((p) => {
-      if (p.id === id) {
-        updated = { ...p, ...updates } as Product;
-        return updated;
-      }
-      return p;
-    }));
-
-    if (updated) {
-      try {
-        await fetch('/api/products', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
-        });
-      } catch (e) {
-        console.error('Failed to update DB', e);
-      }
-    }
+    // Calculate the updated product first so we have access to it for the API call
+    setProducts((prev) => {
+      const targetIndex = prev.findIndex(p => p.id === id);
+      if (targetIndex === -1) return prev;
+      
+      const newProducts = [...prev];
+      const updatedProduct = { ...newProducts[targetIndex], ...updates } as Product;
+      newProducts[targetIndex] = updatedProduct;
+      
+      // Fire the API request synchronously during the update
+      fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProduct)
+      }).catch(e => console.error('Failed to update DB', e));
+      
+      return newProducts;
+    });
   }, []);
 
   const deleteProduct = useCallback(async (id: string) => {
