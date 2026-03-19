@@ -1,40 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 interface SettingsContextType {
   aboutImages: string[];
-  setAboutImage: (index: number, base64: string) => void;
+  setAboutImage: (index: number, base64: string) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'quinta_settings_about_images';
-
 export const SettingsProvider = ({ children }: { children: React.ReactNode }) => {
   const [aboutImages, setAboutImagesState] = useState<string[]>(['', '', '', '']);
 
-  // Load from local storage
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length === 4) {
-          setAboutImagesState(parsed);
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length === 4) {
+          setAboutImagesState(data);
         }
-      } catch (e) {
-        console.error("Could not parse about images", e);
-      }
-    }
+      })
+      .catch(e => {
+        console.error("Could not fetch about images from DB", e);
+      });
   }, []);
 
-  const setAboutImage = (index: number, base64: string) => {
+  const setAboutImage = useCallback(async (index: number, base64: string) => {
     setAboutImagesState((prev) => {
       const newImages = [...prev];
       newImages[index] = base64;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newImages));
+      
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newImages),
+      }).catch(e => console.error('Failed to update settings DB', e));
+      
       return newImages;
     });
-  };
+  }, []);
 
   return (
     <SettingsContext.Provider value={{ aboutImages, setAboutImage }}>
@@ -50,3 +54,4 @@ export const useSettings = () => {
   }
   return context;
 };
+
